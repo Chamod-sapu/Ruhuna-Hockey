@@ -1,4 +1,5 @@
-import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const socials = [
   {
@@ -13,83 +14,236 @@ const socials = [
   },
 ]
 
-export default function Hero() {
-  return (
-    <section id="home" style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden' }}>
-      <video style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} src="/hero.mp4" autoPlay muted loop playsInline />
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.10)' }} />
-      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.13) 0%, transparent 22%, transparent 60%, rgba(0,0,0,0.19) 100%)' }} />
-      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(28,31,74,0.22) 0%, transparent 18%, transparent 82%, rgba(28,31,74,0.10) 100%)' }} />
-      <div style={{ position: 'absolute', top: '-14%', left: '50%', transform: 'translateX(-50%)', width: '1000px', height: '720px', background: 'radial-gradient(ellipse at 50% 30%, rgba(47,52,112,0.30) 0%, transparent 68%)', pointerEvents: 'none' }} />
+interface HeroProps {
+  onOpenContact?: () => void
+}
 
-      <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'flex-start', paddingTop: '24vh', paddingLeft: '64px', paddingRight: '24px' }}>
+export default function Hero({ onOpenContact }: HeroProps) {
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
+
+  // Close modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsVideoModalOpen(false)
+    }
+    if (isVideoModalOpen) {
+      window.addEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = ''
+    }
+  }, [isVideoModalOpen])
+
+  return (
+    <section
+      id="home"
+      className="relative w-full min-h-[100dvh] flex flex-col justify-between overflow-hidden bg-black"
+    >
+      {/* Background Video */}
+      <video
+        className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+        src="/hero.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+      />
+
+      {/* Layered responsive overlays for crystal-clear readability on all devices */}
+      {/* 1. Mobile full dark vignette / Desktop left-to-right gradient */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#0c0f24]/85 via-[#0c0f24]/70 to-[#0c0f24]/90 md:bg-gradient-to-r md:from-[#0c0f24]/92 md:via-[#0c0f24]/55 md:to-transparent pointer-events-none" />
+
+      {/* 2. Top-down shadow for navbar contrast */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none" />
+
+      {/* 3. Subtle ambient radial color glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] md:w-[1000px] h-[400px] md:h-[650px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#2f3470]/35 via-transparent to-transparent pointer-events-none" />
+
+      {/* Main Content Area */}
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-12 lg:px-1 pt-2 sm:pt-10 md:pt-12 lg:pt-18 pb-6 sm:pb-8 flex-1 flex flex-col justify-center">
+        {/* Ruhuna Badge */}
         <motion.div
-          initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.1, ease: 'easeOut' }}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', borderRadius: '999px', padding: '6px 16px 6px 6px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.16)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', width: 'fit-content' }}
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.1, ease: 'easeOut' }}
+          className="inline-flex items-center gap-2 sm:gap-2.5 rounded-full py-1.5 px-3 sm:px-4 bg-white/10 hover:bg-white/15 border border-white/20 backdrop-blur-md w-fit max-w-full shadow-lg shadow-black/20"
         >
-          <div style={{ display: 'flex' }}>
+          <div className="flex items-center shrink-0">
             {[0, 1, 2].map((i) => (
-              <div key={i} style={{ width: '22px', height: '22px', borderRadius: '999px', background: 'linear-gradient(135deg, #f7941d, #c2670a)', border: '2px solid rgba(28,31,74,0.95)', marginLeft: i === 0 ? 0 : '-8px' }} />
+              <div
+                key={i}
+                className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gradient-to-br from-[#f7941d] to-[#c2670a] border-2 border-[#1c1f4a]"
+                style={{ marginLeft: i === 0 ? 0 : '-6px' }}
+              />
             ))}
           </div>
-          <span style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.75)', fontFamily: "'Inter', sans-serif" }}>
-            Proudly representing <strong style={{ color: '#fff', fontWeight: 600 }}>University of Ruhuna</strong>
+          <span className="text-xs sm:text-[13px] text-white/80 font-normal truncate">
+            Proudly representing <strong className="text-white font-semibold">University of Ruhuna</strong>
           </span>
         </motion.div>
 
+        {/* Hero Headline */}
         <motion.h1
-          initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.25, ease: 'easeOut' }}
-          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 500, fontSize: 'clamp(2.4rem, 4.6vw, 4.1rem)', lineHeight: 1.08, letterSpacing: '-0.02em', color: '#fff', marginTop: '22px', maxWidth: '560px' }}
+          initial={{ opacity: 0, y: 22 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.25, ease: 'easeOut' }}
+          className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-[4.2rem] font-medium tracking-tight text-white leading-[1.08] mt-4 sm:mt-6 max-w-xl"
         >
-          Strike Fast.<br /><span style={{ color: '#f7941d' }}>Rise</span> Together.
+          Strike Fast.<br />
+          <span className="text-[#f7941d]">Rise</span> Together.
         </motion.h1>
 
+        {/* Hero Subtitle */}
         <motion.p
-          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.42, ease: 'easeOut' }}
-          style={{ marginTop: '16px', fontSize: '15px', lineHeight: 1.6, color: 'rgba(255,255,255,0.65)', fontFamily: "'Inter', sans-serif", maxWidth: '360px' }}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.42, ease: 'easeOut' }}
+          className="mt-3 sm:mt-5 text-sm sm:text-base md:text-lg text-white/75 leading-relaxed max-w-md sm:max-w-lg font-normal"
         >
           Ruhuna Hockey brings passion, pace and pride to every match — on the pitch and beyond.
         </motion.p>
 
+        {/* Interactive CTA Buttons */}
         <motion.div
-          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.58, ease: 'easeOut' }}
-          style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '30px' }}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.58, ease: 'easeOut' }}
+          className="flex flex-wrap items-center gap-3 sm:gap-4 mt-6 sm:mt-8"
         >
           <motion.a
             href="#contact"
-            whileHover={{ scale: 1.03, borderColor: '#f7941d', boxShadow: '0 0 22px rgba(247,148,29,0.35)' }}
+            onClick={(e) => {
+              if (onOpenContact) {
+                e.preventDefault()
+                onOpenContact()
+              }
+            }}
+            whileHover={{ scale: 1.04, borderColor: '#f7941d', boxShadow: '0 0 24px rgba(247,148,29,0.4)' }}
             whileTap={{ scale: 0.97 }}
-            style={{ padding: '14px 26px', borderRadius: '999px', background: '#1c1f4a', color: '#fff', fontSize: '14px', fontWeight: 600, fontFamily: "'Inter', sans-serif", textDecoration: 'none', border: '1px solid rgba(255,255,255,0.15)' }}
+            className="inline-flex items-center justify-center px-6 sm:px-7 py-3 sm:py-3.5 rounded-full text-sm sm:text-base font-semibold text-white bg-gradient-to-r from-[#1c1f4a] to-[#2f3470] border border-white/20 shadow-lg shadow-black/40 hover:bg-[#2f3470] transition-all cursor-pointer"
           >
             Join the Team
           </motion.a>
-          <motion.a
-            href="#gallery"
-            aria-label="Watch highlights"
-            whileHover={{ scale: 1.08, backgroundColor: 'rgba(247,148,29,0.35)' }}
-            whileTap={{ scale: 0.93 }}
-            style={{ width: '44px', height: '44px', borderRadius: '999px', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+
+          {/* Highlights Trigger */}
+          <motion.button
+            type="button"
+            onClick={() => setIsVideoModalOpen(true)}
+            aria-label="Watch match highlights video"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="flex items-center gap-3 px-3 py-2 sm:px-4 sm:py-2.5 rounded-full bg-white/10 hover:bg-white/15 border border-white/20 backdrop-blur-md text-white transition-all group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f7941d]"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z" /></svg>
-          </motion.a>
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#f7941d] flex items-center justify-center shadow-md shadow-[#f7941d]/30 group-hover:scale-110 transition-transform">
+              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#1c1f4a] translate-x-0.5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+            <span className="text-xs sm:text-sm font-medium pr-1 text-white/90 group-hover:text-white">
+              Watch Highlights
+            </span>
+          </motion.button>
         </motion.div>
       </div>
 
-      <div style={{ position: 'absolute', bottom: '34px', left: '64px', zIndex: 10, display: 'flex', gap: '10px' }}>
-        {socials.map((s) => (
-          <motion.a
-            key={s.label}
-            href={s.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={s.label}
-            whileHover={{ scale: 1.1, borderColor: '#f7941d', color: '#f7941d' }}
-            style={{ width: '34px', height: '34px', borderRadius: '999px', border: '1px solid rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.75)' }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d={s.path} /></svg>
-          </motion.a>
-        ))}
+      {/* Bottom Bar: Social Links & Team Location */}
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-10 lg:px-16 pb-5 sm:pb-7 flex items-center justify-between">
+        {/* Social Links */}
+        <div className="flex items-center gap-2.5">
+          {socials.map((s) => (
+            <motion.a
+              key={s.label}
+              href={s.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={s.label}
+              whileHover={{ scale: 1.12, borderColor: '#f7941d', color: '#f7941d' }}
+              whileTap={{ scale: 0.92 }}
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-white/30 bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f7941d]"
+            >
+              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white fill-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d={s.path} />
+              </svg>
+            </motion.a>
+          ))}
+        </div>
+
+        {/* Team Sub-Badge / Location */}
+        <div className="flex items-center gap-2 text-[11px] sm:text-xs text-white/60">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#f7941d] animate-pulse" />
+          <span className="hidden xs:inline">University of Ruhuna, Sri Lanka</span>
+          <span className="xs:hidden">UOR Hockey</span>
+        </div>
       </div>
+
+      {/* Video Highlights Modal */}
+      <AnimatePresence>
+        {isVideoModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsVideoModalOpen(false)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-xl"
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-4xl bg-[#0c0f24] rounded-2xl overflow-hidden border border-white/15 shadow-2xl shadow-black/80"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-white/10 bg-[#141838]/80">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-[#f7941d]" />
+                  <h3 className="font-semibold text-sm sm:text-base text-white">
+                    Ruhuna Hockey Highlights
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsVideoModalOpen(false)}
+                  aria-label="Close highlights modal"
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Video Player */}
+              <div className="relative aspect-video w-full bg-black">
+                <video
+                  src="/hero.mp4"
+                  controls
+                  autoPlay
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-4 sm:px-6 py-3 bg-[#141838]/60 flex items-center justify-between text-xs text-white/60">
+                <span>Official Match Footage</span>
+                <a
+                  href="https://www.instagram.com/ruhuna.hockey/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#f7941d] hover:underline"
+                >
+                  Follow on Instagram →
+                </a>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   )
 }
+
