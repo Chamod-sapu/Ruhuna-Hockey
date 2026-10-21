@@ -4,11 +4,63 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Ruhuna Hockey — the University of Ruhuna hockey team. Passion, pace and pride on and off the pitch." />
-    <title>Ruhuna Hockey</title>
+    <meta name="theme-color" content="#1c1f4a" />
+    
+    <title>Ruhuna Hockey — University of Ruhuna</title>
+    <meta
+      name="description"
+      content="Official website of the University of Ruhuna Hockey team. Match fixtures, squad roster, championship achievements, upcoming events, and photo gallery."
+    />
+
+    <!-- Canonical link placeholder -->
+    <link rel="canonical" href="https://ruhuna-hockey.vercel.app/" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://ruhuna-hockey.vercel.app/" />
+    <meta property="og:title" content="Ruhuna Hockey — University of Ruhuna" />
+    <meta
+      property="og:description"
+      content="Official website of the University of Ruhuna Hockey team. Match fixtures, squad roster, championship achievements, upcoming events, and photo gallery."
+    />
+    <meta property="og:image" content="/logo.png" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://ruhuna-hockey.vercel.app/" />
+    <meta name="twitter:title" content="Ruhuna Hockey — University of Ruhuna" />
+    <meta
+      name="twitter:description"
+      content="Official website of the University of Ruhuna Hockey team. Match fixtures, squad roster, championship achievements, upcoming events, and photo gallery."
+    />
+    <meta name="twitter:image" content="/logo.png" />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- JSON-LD SportsTeam Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SportsTeam",
+      "name": "Ruhuna Hockey",
+      "sport": "Field hockey",
+      "parentOrganization": {
+        "@type": "CollegeOrUniversity",
+        "name": "University of Ruhuna"
+      },
+      "logo": "https://ruhuna-hockey.vercel.app/logo.png",
+      "sameAs": [
+        "https://web.facebook.com/uorhockey",
+        "https://www.instagram.com/ruhuna.hockey/"
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>

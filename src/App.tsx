@@ -1,25 +1,24 @@
-import { useState } from 'react'
-import Navbar from './components/Navbar'
-import Hero from './components/Hero'
-import ContactModal from './components/ContactModal'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { AuthProvider } from './context/AuthContext'
+import Home from './pages/Home'
+import Login from './pages/Login'
+import ErrorBoundary from './components/ErrorBoundary'
+import DevEnvBanner from './components/DevEnvBanner'
 import './index.css'
 
-function App() {
-  const [isContactOpen, setIsContactOpen] = useState(false)
-
+export default function App() {
   return (
-    <div className="w-full min-h-screen bg-black text-white selection:bg-[#f7941d] selection:text-[#1c1f4a]">
-      <Navbar onOpenContact={() => setIsContactOpen(true)} />
-      <main>
-        <Hero onOpenContact={() => setIsContactOpen(true)} />
-      </main>
-      <ContactModal
-        isOpen={isContactOpen}
-        onClose={() => setIsContactOpen(false)}
-      />
-    </div>
+    <ErrorBoundary>
+      <DevEnvBanner />
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }
-
-export default App
-

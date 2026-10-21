@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const socials = [
@@ -20,6 +20,47 @@ interface HeroProps {
 
 export default function Hero({ onOpenContact }: HeroProps) {
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
+  const heroRef = useRef<HTMLElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  // Pause hero video when tab is hidden or section is off-screen
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    let isHeroInView = true
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isHeroInView = entry.isIntersecting
+        if (entry.isIntersecting && !document.hidden) {
+          void video.play().catch(() => {})
+        } else {
+          video.pause()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (heroRef.current) {
+      observer.observe(heroRef.current)
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        video.pause()
+      } else if (isHeroInView) {
+        void video.play().catch(() => {})
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      observer.disconnect()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [])
 
   // Close modal on Escape key
   useEffect(() => {
@@ -40,17 +81,21 @@ export default function Hero({ onOpenContact }: HeroProps) {
 
   return (
     <section
+      ref={heroRef}
       id="home"
       className="relative w-full min-h-[100dvh] flex flex-col justify-between overflow-hidden bg-black"
     >
-      {/* Background Video */}
+      {/* Background Video with metadata preload and poster */}
       <video
+        ref={videoRef}
         className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
         src="/hero.mp4"
         autoPlay
         muted
         loop
         playsInline
+        preload="metadata"
+        poster="/logo.png"
       />
 
       {/* Layered responsive overlays for crystal-clear readability on all devices */}
@@ -64,7 +109,7 @@ export default function Hero({ onOpenContact }: HeroProps) {
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] md:w-[1000px] h-[400px] md:h-[650px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#2f3470]/35 via-transparent to-transparent pointer-events-none" />
 
       {/* Main Content Area */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-12 lg:px-1 pt-2 sm:pt-10 md:pt-12 lg:pt-18 pb-6 sm:pb-8 flex-1 flex flex-col justify-center">
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-5 sm:px-6 md:px-12 lg:px-16 pt-24 sm:pt-28 md:pt-32 pb-8 sm:pb-12 flex-1 flex flex-col justify-center">
         {/* Ruhuna Badge */}
         <motion.div
           initial={{ opacity: 0, y: 14 }}
@@ -86,12 +131,13 @@ export default function Hero({ onOpenContact }: HeroProps) {
           </span>
         </motion.div>
 
-        {/* Hero Headline */}
+        {/* Hero Headline with clamp() sizing */}
         <motion.h1
           initial={{ opacity: 0, y: 22 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.25, ease: 'easeOut' }}
-          className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-[4.2rem] font-medium tracking-tight text-white leading-[1.08] mt-4 sm:mt-6 max-w-xl"
+          style={{ fontSize: 'clamp(2rem, 5.5vw, 4.2rem)' }}
+          className="font-medium tracking-tight text-white leading-[1.08] mt-4 sm:mt-6 max-w-xl"
         >
           Strike Fast.<br />
           <span className="text-[#f7941d]">Rise</span> Together.
@@ -124,7 +170,7 @@ export default function Hero({ onOpenContact }: HeroProps) {
             }}
             whileHover={{ scale: 1.04, borderColor: '#f7941d', boxShadow: '0 0 24px rgba(247,148,29,0.4)' }}
             whileTap={{ scale: 0.97 }}
-            className="inline-flex items-center justify-center px-6 sm:px-7 py-3 sm:py-3.5 rounded-full text-sm sm:text-base font-semibold text-white bg-gradient-to-r from-[#1c1f4a] to-[#2f3470] border border-white/20 shadow-lg shadow-black/40 hover:bg-[#2f3470] transition-all cursor-pointer"
+            className="inline-flex items-center justify-center min-h-[44px] px-6 sm:px-7 py-3 rounded-full text-sm sm:text-base font-semibold text-white bg-gradient-to-r from-[#1c1f4a] to-[#2f3470] border border-white/20 shadow-lg shadow-black/40 hover:bg-[#2f3470] transition-all cursor-pointer"
           >
             Join the Team
           </motion.a>
@@ -136,9 +182,9 @@ export default function Hero({ onOpenContact }: HeroProps) {
             aria-label="Watch match highlights video"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="flex items-center gap-3 px-3 py-2 sm:px-4 sm:py-2.5 rounded-full bg-white/10 hover:bg-white/15 border border-white/20 backdrop-blur-md text-white transition-all group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f7941d]"
+            className="flex items-center gap-3 min-h-[44px] px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full bg-white/10 hover:bg-white/15 border border-white/20 backdrop-blur-md text-white transition-all group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f7941d] cursor-pointer"
           >
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#f7941d] flex items-center justify-center shadow-md shadow-[#f7941d]/30 group-hover:scale-110 transition-transform">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#f7941d] flex items-center justify-center shadow-md shadow-[#f7941d]/30 group-hover:scale-110 transition-transform shrink-0">
               <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#1c1f4a] translate-x-0.5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
               </svg>
@@ -148,12 +194,32 @@ export default function Hero({ onOpenContact }: HeroProps) {
             </span>
           </motion.button>
         </motion.div>
+
+        {/* Mobile-only social icons placed in flow beneath buttons (< 640px) */}
+        <div className="flex sm:hidden items-center gap-3 mt-7">
+          {socials.map((s) => (
+            <motion.a
+              key={s.label}
+              href={s.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={s.label}
+              whileTap={{ scale: 0.92 }}
+              className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full border border-white/30 bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+            >
+              <svg className="w-4 h-4 text-white fill-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d={s.path} />
+              </svg>
+            </motion.a>
+          ))}
+          <span className="text-xs text-white/60 ml-1">Follow Ruhuna Hockey</span>
+        </div>
       </div>
 
-      {/* Bottom Bar: Social Links & Team Location */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-10 lg:px-16 pb-5 sm:pb-7 flex items-center justify-between">
-        {/* Social Links */}
-        <div className="flex items-center gap-2.5">
+      {/* Bottom Bar: Social Links & Team Location (>= 640px) */}
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-5 sm:px-6 md:px-12 lg:px-16 pb-5 sm:pb-7 flex items-center justify-between">
+        {/* Social Links (hidden on <640px since moved into flow above) */}
+        <div className="hidden sm:flex items-center gap-2.5">
           {socials.map((s) => (
             <motion.a
               key={s.label}
@@ -163,9 +229,9 @@ export default function Hero({ onOpenContact }: HeroProps) {
               aria-label={s.label}
               whileHover={{ scale: 1.12, borderColor: '#f7941d', color: '#f7941d' }}
               whileTap={{ scale: 0.92 }}
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-white/30 bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f7941d]"
+              className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full border border-white/30 bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f7941d]"
             >
-              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white fill-white" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-white fill-white" fill="currentColor" viewBox="0 0 24 24">
                 <path d={s.path} />
               </svg>
             </motion.a>
@@ -173,7 +239,7 @@ export default function Hero({ onOpenContact }: HeroProps) {
         </div>
 
         {/* Team Sub-Badge / Location */}
-        <div className="flex items-center gap-2 text-[11px] sm:text-xs text-white/60">
+        <div className="flex items-center gap-2 text-xs text-white/60 ml-auto sm:ml-0">
           <span className="w-1.5 h-1.5 rounded-full bg-[#f7941d] animate-pulse" />
           <span className="hidden xs:inline">University of Ruhuna, Sri Lanka</span>
           <span className="xs:hidden">UOR Hockey</span>
@@ -196,10 +262,10 @@ export default function Hero({ onOpenContact }: HeroProps) {
               exit={{ scale: 0.92, opacity: 0 }}
               transition={{ duration: 0.3 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative w-full max-w-4xl bg-[#0c0f24] rounded-2xl overflow-hidden border border-white/15 shadow-2xl shadow-black/80"
+              className="relative w-full max-w-4xl bg-[#0c0f24] rounded-2xl overflow-hidden border border-white/15 shadow-2xl shadow-black/80 max-h-[90vh] flex flex-col"
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-white/10 bg-[#141838]/80">
+              <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-white/10 bg-[#141838]/80 shrink-0">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-[#f7941d]" />
                   <h3 className="font-semibold text-sm sm:text-base text-white">
@@ -210,25 +276,27 @@ export default function Hero({ onOpenContact }: HeroProps) {
                   type="button"
                   onClick={() => setIsVideoModalOpen(false)}
                   aria-label="Close highlights modal"
-                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-colors"
+                  className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer text-lg"
                 >
                   ✕
                 </button>
               </div>
 
               {/* Video Player */}
-              <div className="relative aspect-video w-full bg-black">
+              <div className="relative aspect-video w-full bg-black overflow-y-auto">
                 <video
                   src="/hero.mp4"
                   controls
                   autoPlay
                   playsInline
+                  preload="metadata"
+                  poster="/logo.png"
                   className="w-full h-full object-cover"
                 />
               </div>
 
               {/* Modal Footer */}
-              <div className="px-4 sm:px-6 py-3 bg-[#141838]/60 flex items-center justify-between text-xs text-white/60">
+              <div className="px-4 sm:px-6 py-3 bg-[#141838]/60 flex items-center justify-between text-xs text-white/60 shrink-0">
                 <span>Official Match Footage</span>
                 <a
                   href="https://www.instagram.com/ruhuna.hockey/"
@@ -246,4 +314,3 @@ export default function Hero({ onOpenContact }: HeroProps) {
     </section>
   )
 }
-
