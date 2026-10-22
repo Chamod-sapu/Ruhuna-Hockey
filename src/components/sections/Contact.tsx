@@ -61,11 +61,18 @@ export default function Contact() {
     ascending: false,
   })
 
-  // For each of the 4 roles, find the leader with the highest season_year
+  // For each of the leadership roles, find the leader with the highest season_year
   const contactPeople = useMemo(() => {
     return LEADERSHIP_ROLES.map((role: LeadershipRole) => {
       const match = leaders
-        .filter((l) => l.role === role)
+        .filter((l) => {
+          if (l.role === role) return true
+          if (role === "Men's Captain" && (l.role === "Men's Team Captain" || l.role === 'Captain')) return true
+          if (role === "Women's Captain" && l.role === "Women's Team Captain") return true
+          if (role === "Men's Vice Captain" && (l.role === "Vice Men's Team Captain" || l.role === 'Vice Captain')) return true
+          if (role === "Women's Vice Captain" && l.role === "Vice Women's Team Captain") return true
+          return false
+        })
         .sort((a, b) => b.season_year - a.season_year)[0]
       return { role, leader: match ?? null }
     })
@@ -513,14 +520,23 @@ export default function Contact() {
                             padding: '2px 8px',
                             borderRadius: '999px',
                             background:
-                              role === 'Captain'
+                              role.includes('Captain') && !role.includes('Vice')
                                 ? colors.orange
-                                : 'rgba(247, 148, 29, 0.18)',
-                            color: role === 'Captain' ? colors.deepNavy : colors.orange,
+                                : role.includes('Vice')
+                                ? 'rgba(247, 148, 29, 0.18)'
+                                : 'rgba(255, 255, 255, 0.08)',
+                            color:
+                              role.includes('Captain') && !role.includes('Vice')
+                                ? colors.deepNavy
+                                : role.includes('Vice')
+                                ? colors.orange
+                                : '#ffffff',
                             border:
-                              role === 'Captain'
+                              role.includes('Captain') && !role.includes('Vice')
                                 ? 'none'
-                                : `1px solid rgba(247, 148, 29, 0.4)`,
+                                : role.includes('Vice')
+                                ? '1px solid rgba(247, 148, 29, 0.4)'
+                                : '1px solid rgba(255, 255, 255, 0.15)',
                             fontSize: '10.5px',
                             fontWeight: 800,
                             textTransform: 'uppercase',

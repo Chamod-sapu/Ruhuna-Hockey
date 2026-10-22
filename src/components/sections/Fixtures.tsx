@@ -10,7 +10,21 @@ import { useTable } from '../../hooks/useTable'
 import { colors, fonts } from '../../lib/theme'
 import { useAuth } from '../../context/AuthContext'
 import { fmtDate, fmtTime, fmtDay, fmtMonth, toLocalInput, fromLocalInput } from '../../lib/format'
-import { FIXTURE_STATUSES, type Fixture, type Tournament } from '../../lib/types'
+import { FIXTURE_STATUSES, MATCH_TEAMS, type MatchTeam, type Fixture, type Tournament } from '../../lib/types'
+
+function getFixtureTeamType(f: Fixture): MatchTeam {
+  if (f.team_type === "Women's" || f.team_type === 'women') return "Women's"
+  if (f.team_type === "Men's" || f.team_type === 'men') return "Men's"
+  if (f.notes && /\[Team:\s*Women's\]/i.test(f.notes)) return "Women's"
+  if (f.notes && /\[Team:\s*Men's\]/i.test(f.notes)) return "Men's"
+  return "Men's"
+}
+
+function cleanFixtureNotes(notes: string | null | undefined): string | null {
+  if (!notes) return null
+  const cleaned = notes.replace(/\[Team:\s*(Men's|Women's)\]\s*/gi, '').trim()
+  return cleaned || null
+}
 
 function getInitials(name: string): string {
   if (!name) return 'OP'
@@ -24,6 +38,8 @@ function formatUtcForIcs(date: Date): string {
 }
 
 function downloadIcs(fixture: Fixture, tournamentName?: string | null) {
+  const team = getFixtureTeamType(fixture)
+  const notesText = cleanFixtureNotes(fixture.notes)
   const startDate = new Date(fixture.match_at)
   const endDate = new Date(startDate.getTime() + 90 * 60 * 1000) // 90-minute match
   const startStr = formatUtcForIcs(startDate)
@@ -41,9 +57,9 @@ function downloadIcs(fixture: Fixture, tournamentName?: string | null) {
     `DTSTAMP:${nowStr}`,
     `DTSTART:${startStr}`,
     `DTEND:${endStr}`,
-    `SUMMARY:Ruhuna Hockey vs ${fixture.opponent}`,
+    `SUMMARY:Ruhuna Hockey vs ${fixture.opponent} (${team} Match)`,
     `LOCATION:${(fixture.venue || 'TBA').replace(/,/g, '\\,')}`,
-    `DESCRIPTION:Ruhuna Hockey vs ${fixture.opponent} (${fixture.home_away} match)${tournamentName ? ` - ${tournamentName}` : ''}${fixture.notes ? `\\n\\nNotes: ${fixture.notes}` : ''}`,
+    `DESCRIPTION:Ruhuna Hockey vs ${fixture.opponent} (${team} - ${fixture.home_away} match)${tournamentName ? ` - ${tournamentName}` : ''}${notesText ? `\\n\\nNotes: ${notesText}` : ''}`,
     'STATUS:CONFIRMED',
     'END:VEVENT',
     'END:VCALENDAR',
@@ -203,10 +219,14 @@ export default function Fixtures() {
   // 4. Tabs & Filter State
   const [activeTab, setActiveTab] = useState<'Upcoming' | 'Results' | 'All'>('Upcoming')
   const [selectedTournamentFilter, setSelectedTournamentFilter] = useState<string>('ALL')
+  const [selectedTeamFilter, setSelectedTeamFilter] = useState<'ALL' | MatchTeam>('ALL')
 
   // Filtered fixtures list
   const filteredFixtures = useMemo(() => {
     let list = fixtures
+    if (selectedTeamFilter !== 'ALL') {
+      list = list.filter((f) => getFixtureTeamType(f) === selectedTeamFilter)
+    }
     if (selectedTournamentFilter !== 'ALL') {
       list = list.filter((f) => f.tournament_id === selectedTournamentFilter)
     }
@@ -223,7 +243,7 @@ export default function Fixtures() {
     }
     // 'All' tab: descending by match_at
     return [...list].sort((a, b) => new Date(b.match_at).getTime() - new Date(a.match_at).getTime())
-  }, [fixtures, selectedTournamentFilter, activeTab])
+  }, [fixtures, selectedTeamFilter, selectedTournamentFilter, activeTab])
 
   // Expanded notes toggle state (by fixture ID)
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({})
@@ -235,6 +255,7 @@ export default function Fixtures() {
   // (a) Full Match Modal (Add / Edit)
   const [isMatchModalOpen, setIsMatchModalOpen] = useState(false)
   const [editingFixture, setEditingFixture] = useState<Fixture | null>(null)
+  const [formTeamType, setFormTeamType] = useState<MatchTeam>("Men's")
   const [formTournamentId, setFormTournamentId] = useState<string>('')
   const [formOpponent, setFormOpponent] = useState('')
   const [formVenue, setFormVenue] = useState('')
@@ -261,6 +282,7 @@ export default function Fixtures() {
   // Handlers
   const openAddMatchModal = () => {
     setEditingFixture(null)
+    setFormTeamType("Men's")
     setFormTournamentId('')
     setFormOpponent('')
     setFormVenue('')
@@ -276,6 +298,7 @@ export default function Fixtures() {
 
   const openEditMatchModal = (f: Fixture) => {
     setEditingFixture(f)
+    setFormTeamType(getFixtureTeamType(f))
     setFormTournamentId(f.tournament_id ?? '')
     setFormOpponent(f.opponent)
     setFormVenue(f.venue ?? '')
@@ -284,7 +307,7 @@ export default function Fixtures() {
     setFormStatus(f.status)
     setFormOurScore(f.our_score ?? '')
     setFormOpponentScore(f.opponent_score ?? '')
-    setFormNotes(f.notes ?? '')
+    setFormNotes(cleanFixtureNotes(f.notes) ?? '')
     setMatchFormError(null)
     setIsMatchModalOpen(true)
   }
@@ -302,7 +325,7 @@ export default function Fixtures() {
       }
     }
 
-    const payload = {
+    const basePayload: Record<string, unknown> = {
       tournament_id: formTournamentId || null,
       opponent: formOpponent.trim(),
       venue: formVenue.trim() || null,
@@ -311,14 +334,35 @@ export default function Fixtures() {
       status: formStatus,
       our_score: formStatus === 'Completed' ? Number(formOurScore) : null,
       opponent_score: formStatus === 'Completed' ? Number(formOpponentScore) : null,
+    }
+
+    // Try primary save with team_type column
+    const fullPayload = {
+      ...basePayload,
+      team_type: formTeamType,
       notes: formNotes.trim() || null,
     }
 
     let err: string | null = null
     if (editingFixture) {
-      err = await updateFixture(editingFixture.id, payload)
+      err = await updateFixture(editingFixture.id, fullPayload)
     } else {
-      err = await addFixture(payload)
+      err = await addFixture(fullPayload)
+    }
+
+    // If schema cache does not have team_type column yet, fallback to storing team tag in notes
+    if (err && (err.includes('team_type') || err.includes('PGRST204') || err.includes('column'))) {
+      const userNotes = cleanFixtureNotes(formNotes.trim()) ?? ''
+      const fallbackNotes = `[Team: ${formTeamType}]${userNotes ? ' ' + userNotes : ''}`
+      const fallbackPayload = {
+        ...basePayload,
+        notes: fallbackNotes || null,
+      }
+      if (editingFixture) {
+        err = await updateFixture(editingFixture.id, fallbackPayload)
+      } else {
+        err = await addFixture(fallbackPayload)
+      }
     }
 
     if (err) {
@@ -441,6 +485,24 @@ export default function Fixtures() {
                   }}
                 >
                   Next Match
+                </span>
+                <span
+                  style={{
+                    fontFamily: fonts.body,
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    color: getFixtureTeamType(nextMatch) === "Women's" ? '#f472b6' : '#38bdf8',
+                    background: getFixtureTeamType(nextMatch) === "Women's" ? 'rgba(244,114,182,0.15)' : 'rgba(56,189,248,0.15)',
+                    border: `1px solid ${getFixtureTeamType(nextMatch) === "Women's" ? 'rgba(244,114,182,0.35)' : 'rgba(56,189,248,0.35)'}`,
+                    padding: '4px 12px',
+                    borderRadius: '999px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  🏑 {getFixtureTeamType(nextMatch)} Match
                 </span>
                 {nextMatch.tournament_id && tournamentMap[nextMatch.tournament_id] && (
                   <span
@@ -685,32 +747,71 @@ export default function Fixtures() {
           })}
         </div>
 
-        {/* Tournament Filter Select */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '12.5px', color: colors.textSoft, fontFamily: fonts.body }}>
-            Filter:
-          </span>
-          <select
-            value={selectedTournamentFilter}
-            onChange={(e) => setSelectedTournamentFilter(e.target.value)}
+        {/* Filters: Team Filter Pills + Tournament Filter Select */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* Team filter pill: All / Men's / Women's */}
+          <div
             style={{
-              ...inputStyle,
-              width: 'auto',
-              minWidth: '180px',
-              padding: '8px 14px',
-              fontSize: '13px',
-              cursor: 'pointer',
+              display: 'flex',
+              background: 'rgba(255,255,255,0.06)',
+              borderRadius: '999px',
+              padding: '3px',
+              gap: '2px',
             }}
           >
-            <option value="ALL" style={{ background: colors.deepNavy, color: '#fff' }}>
-              All Tournaments
-            </option>
-            {tournaments.map((t) => (
-              <option key={t.id} value={t.id} style={{ background: colors.deepNavy, color: '#fff' }}>
-                {t.name} ({t.season_year})
+            {(['ALL', ...MATCH_TEAMS] as const).map((t) => {
+              const isSelected = selectedTeamFilter === t
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setSelectedTeamFilter(t)}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '999px',
+                    background: isSelected ? colors.orange : 'transparent',
+                    color: isSelected ? colors.deepNavy : '#ffffff',
+                    fontWeight: isSelected ? 700 : 500,
+                    fontSize: '12px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: fonts.body,
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {t === 'ALL' ? 'All Matches' : `${t} Match`}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Tournament Filter Select */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '12.5px', color: colors.textSoft, fontFamily: fonts.body }}>
+              Tournament:
+            </span>
+            <select
+              value={selectedTournamentFilter}
+              onChange={(e) => setSelectedTournamentFilter(e.target.value)}
+              style={{
+                ...inputStyle,
+                width: 'auto',
+                minWidth: '170px',
+                padding: '8px 14px',
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="ALL" style={{ background: colors.deepNavy, color: '#fff' }}>
+                All Tournaments
               </option>
-            ))}
-          </select>
+              {tournaments.map((t) => (
+                <option key={t.id} value={t.id} style={{ background: colors.deepNavy, color: '#fff' }}>
+                  {t.name} ({t.season_year})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -753,7 +854,9 @@ export default function Fixtures() {
               const oppScore = fixture.opponent_score ?? 0
               const isWin = ourScore > oppScore
               const isDraw = ourScore === oppScore
-              const hasNotes = Boolean(fixture.notes)
+              const teamType = getFixtureTeamType(fixture)
+              const displayNotes = cleanFixtureNotes(fixture.notes)
+              const hasNotes = Boolean(displayNotes)
               const notesOpen = Boolean(expandedNotes[fixture.id])
 
               return (
@@ -908,8 +1011,25 @@ export default function Fixtures() {
                         </h4>
                       </div>
 
-                      {/* Venue + Home/Away + Tournament */}
+                      {/* Team Badge + Venue + Home/Away + Tournament */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '12px', color: colors.textSoft }}>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            letterSpacing: '0.04em',
+                            color: teamType === "Women's" ? '#f472b6' : '#38bdf8',
+                            background: teamType === "Women's" ? 'rgba(244,114,182,0.14)' : 'rgba(56,189,248,0.14)',
+                            border: `1px solid ${teamType === "Women's" ? 'rgba(244,114,182,0.35)' : 'rgba(56,189,248,0.35)'}`,
+                            padding: '2px 9px',
+                            borderRadius: '999px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          🏑 {teamType} Match
+                        </span>
                         {fixture.venue && <span>📍 {fixture.venue}</span>}
                         <span
                           style={{
@@ -1082,7 +1202,7 @@ export default function Fixtures() {
                         }}
                       >
                         <p style={{ fontFamily: fonts.body, fontSize: '13px', color: colors.grey, margin: 0, lineHeight: 1.5 }}>
-                          📝 {fixture.notes}
+                          📝 {displayNotes}
                         </p>
                       </motion.div>
                     )}
@@ -1102,6 +1222,55 @@ export default function Fixtures() {
         width={560}
       >
         <form onSubmit={handleSaveMatch}>
+          {/* Match Category / Team Selection */}
+          <div style={{ marginBottom: '16px' }}>
+            <Field label="Match Category / Team" hint="Select whether this is a Men's or Women's match">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                {MATCH_TEAMS.map((team) => {
+                  const active = formTeamType === team
+                  const isWomen = team === "Women's"
+                  return (
+                    <button
+                      key={team}
+                      type="button"
+                      onClick={() => setFormTeamType(team)}
+                      style={{
+                        padding: '11px 16px',
+                        borderRadius: '12px',
+                        background: active
+                          ? isWomen
+                            ? 'rgba(244,114,182,0.22)'
+                            : colors.orange
+                          : 'rgba(255,255,255,0.06)',
+                        color: active ? (isWomen ? '#fff' : colors.deepNavy) : '#ffffff',
+                        border: active
+                          ? `1.5px solid ${isWomen ? '#f472b6' : colors.orange}`
+                          : `1px solid ${colors.glassBorder}`,
+                        fontWeight: active ? 800 : 500,
+                        fontSize: '13.5px',
+                        cursor: 'pointer',
+                        fontFamily: fonts.body,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        boxShadow: active
+                          ? isWomen
+                            ? '0 0 16px rgba(244,114,182,0.3)'
+                            : '0 0 16px rgba(247,148,29,0.3)'
+                          : 'none',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <span style={{ fontSize: '15px' }}>🏑</span>
+                      <span>{team} Match</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </Field>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
             <Field label="Opponent Team">
               <input

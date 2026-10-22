@@ -13,7 +13,23 @@ import { colors, fonts } from '../../lib/theme'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { fmtDate } from '../../lib/format'
-import { POSITIONS, type Position, type Tournament, type Player, type SquadMember } from '../../lib/types'
+import { POSITIONS, SQUAD_TEAMS, type Position, type SquadTeam, type Tournament, type Player, type SquadMember } from '../../lib/types'
+
+function getSquadMemberTeam(m: SquadMember): SquadTeam {
+  const raw = m.team_type || m.players?.team_type
+  if (raw === "Women's Team" || raw === "Women's" || raw === 'women') return "Women's Team"
+  if (raw === "Men's Team" || raw === "Men's" || raw === 'men') return "Men's Team"
+  const bio = m.players?.bio
+  if (bio && /\[Team:\s*Women's(?:\s*Team)?\]/i.test(bio)) return "Women's Team"
+  if (bio && /\[Team:\s*Men's(?:\s*Team)?\]/i.test(bio)) return "Men's Team"
+  return "Men's Team"
+}
+
+function cleanPlayerBio(bio: string | null | undefined): string | null {
+  if (!bio) return null
+  const cleaned = bio.replace(/\[Team:\s*(Men's|Women's)(?:\s*Team)?\]\s*/gi, '').trim()
+  return cleaned || null
+}
 
 function getInitials(name: string): string {
   if (!name) return 'RH'
@@ -64,6 +80,8 @@ function TradingCard({
   const player = member.players
   const isCaptain = member.is_captain
   const isViceCaptain = member.is_vice_captain
+  const team = getSquadMemberTeam(member)
+  const isWomen = team === "Women's Team"
 
   return (
     <motion.div
@@ -223,25 +241,49 @@ function TradingCard({
             gap: '8px',
           }}
         >
-          {/* Position Badge */}
-          <span
-            style={{
-              padding: '4px 10px',
-              borderRadius: '999px',
-              background: 'rgba(255,255,255,0.1)',
-              border: `1px solid ${colors.glassBorder}`,
-              color: '#ffffff',
-              fontSize: '11px',
-              fontWeight: 600,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)',
-              fontFamily: fonts.body,
-            }}
-          >
-            {member.position}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {/* Team Badge */}
+            <span
+              style={{
+                padding: '3px 8px',
+                borderRadius: '999px',
+                background: isWomen ? 'rgba(244,114,182,0.18)' : 'rgba(56,189,248,0.18)',
+                border: `1px solid ${isWomen ? 'rgba(244,114,182,0.45)' : 'rgba(56,189,248,0.45)'}`,
+                color: isWomen ? '#f472b6' : '#38bdf8',
+                fontSize: '10.5px',
+                fontWeight: 700,
+                letterSpacing: '0.02em',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                fontFamily: fonts.body,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+              }}
+            >
+              🏑 {team === "Women's Team" ? "Women's" : "Men's"}
+            </span>
+
+            {/* Position Badge */}
+            <span
+              style={{
+                padding: '3px 8px',
+                borderRadius: '999px',
+                background: 'rgba(255,255,255,0.1)',
+                border: `1px solid ${colors.glassBorder}`,
+                color: '#ffffff',
+                fontSize: '10.5px',
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                fontFamily: fonts.body,
+              }}
+            >
+              {member.position}
+            </span>
+          </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             {/* Captain / Vice Captain Badge */}
@@ -380,30 +422,52 @@ export default function Team() {
     ascending: true,
   })
 
-  // 3. Position Filter State
+  // 3. Team & Position Filter State
+  const [selectedTeamFilter, setSelectedTeamFilter] = useState<'All' | SquadTeam>('All')
   const [positionFilter, setPositionFilter] = useState<'All' | Position>('All')
 
-  const filteredSquad = useMemo(() => {
-    if (positionFilter === 'All') return squadMembers
-    return squadMembers.filter((m) => m.position === positionFilter)
-  }, [squadMembers, positionFilter])
+  // Filter squad by selected team
+  const squadForSelectedTeam = useMemo(() => {
+    if (selectedTeamFilter === 'All') return squadMembers
+    return squadMembers.filter((m) => getSquadMemberTeam(m) === selectedTeamFilter)
+  }, [squadMembers, selectedTeamFilter])
 
-  // Position counts
-  const positionCounts = useMemo(() => {
+  // Filtered squad by position within selected team
+  const filteredSquad = useMemo(() => {
+    if (positionFilter === 'All') return squadForSelectedTeam
+    return squadForSelectedTeam.filter((m) => m.position === positionFilter)
+  }, [squadForSelectedTeam, positionFilter])
+
+  // Team counts for current tournament squad
+  const teamCounts = useMemo(() => {
     const counts: Record<string, number> = {
       All: squadMembers.length,
+      "Men's Team": 0,
+      "Women's Team": 0,
+    }
+    for (const m of squadMembers) {
+      const t = getSquadMemberTeam(m)
+      counts[t] = (counts[t] || 0) + 1
+    }
+    return counts
+  }, [squadMembers])
+
+  // Position counts (scoped to selected team)
+  const positionCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      All: squadForSelectedTeam.length,
       Goalkeeper: 0,
       Defender: 0,
       Midfielder: 0,
       Forward: 0,
     }
-    for (const m of squadMembers) {
+    for (const m of squadForSelectedTeam) {
       if (counts[m.position] !== undefined) {
         counts[m.position]++
       }
     }
     return counts
-  }, [squadMembers])
+  }, [squadForSelectedTeam])
 
   // 4. Master Players List (for "Pick existing player" tab)
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
@@ -440,6 +504,7 @@ export default function Team() {
   const [editingMember, setEditingMember] = useState<SquadMember | null>(null)
 
   // Squad form fields
+  const [formTeamType, setFormTeamType] = useState<SquadTeam>("Men's Team")
   const [formJersey, setFormJersey] = useState<number | ''>('')
   const [formPosition, setFormPosition] = useState<Position>('Forward')
   const [formIsCaptain, setFormIsCaptain] = useState(false)
@@ -544,6 +609,7 @@ export default function Team() {
     void loadAllPlayers()
     setEditingMember(null)
     setSquadModalTab('existing')
+    setFormTeamType(selectedTeamFilter === "Women's Team" ? "Women's Team" : "Men's Team")
     setFormJersey('')
     setFormPosition('Forward')
     setFormIsCaptain(false)
@@ -562,6 +628,7 @@ export default function Team() {
   const openEditSquadModal = (member: SquadMember) => {
     setEditingMember(member)
     setSquadModalTab('new')
+    setFormTeamType(getSquadMemberTeam(member))
     setFormJersey(member.jersey_number ?? '')
     setFormPosition(member.position)
     setFormIsCaptain(member.is_captain)
@@ -571,7 +638,7 @@ export default function Team() {
     setPPhotoUrl(p?.photo_url ?? null)
     setPFaculty(p?.faculty ?? '')
     setPAcademicYear(p?.academic_year ?? '')
-    setPBio(p?.bio ?? '')
+    setPBio(cleanPlayerBio(p?.bio) ?? '')
     setSquadFormError(null)
     setIsSquadModalOpen(true)
   }
@@ -583,41 +650,67 @@ export default function Team() {
     setSquadFormError(null)
 
     try {
-      // Captain/Vice Captain exclusivity rule for tournament
+      // Captain / Vice Captain exclusivity rule scoped to tournament AND team
       if (formIsCaptain) {
-        await supabase
-          .from('squad_members')
-          .update({ is_captain: false })
-          .eq('tournament_id', selectedTournamentId)
-          .eq('is_captain', true)
+        const existingCaptains = squadMembers.filter(
+          (m) => getSquadMemberTeam(m) === formTeamType && m.is_captain && (!editingMember || m.id !== editingMember.id)
+        )
+        for (const cap of existingCaptains) {
+          await supabase.from('squad_members').update({ is_captain: false }).eq('id', cap.id)
+        }
       }
       if (formIsViceCaptain) {
-        await supabase
-          .from('squad_members')
-          .update({ is_vice_captain: false })
-          .eq('tournament_id', selectedTournamentId)
-          .eq('is_vice_captain', true)
+        const existingVCs = squadMembers.filter(
+          (m) => getSquadMemberTeam(m) === formTeamType && m.is_vice_captain && (!editingMember || m.id !== editingMember.id)
+        )
+        for (const vc of existingVCs) {
+          await supabase.from('squad_members').update({ is_vice_captain: false }).eq('id', vc.id)
+        }
       }
+
+      const cleanBioText = cleanPlayerBio(pBio) ?? ''
+      const fallbackBio = `[Team: ${formTeamType}]${cleanBioText ? ' ' + cleanBioText : ''}`
 
       if (editingMember) {
         // 1. Update player's own details in 'players'
         if (editingMember.player_id) {
-          await supabase.from('players').update({
+          const { error: pUpdateErr } = await supabase.from('players').update({
             full_name: pFullName.trim(),
             photo_url: pPhotoUrl,
             faculty: pFaculty.trim() || null,
             academic_year: pAcademicYear.trim() || null,
-            bio: pBio.trim() || null,
+            bio: cleanBioText || null,
+            team_type: formTeamType,
           }).eq('id', editingMember.player_id)
+
+          if (pUpdateErr && (pUpdateErr.message.includes('team_type') || pUpdateErr.message.includes('column') || pUpdateErr.code === '42703')) {
+            await supabase.from('players').update({
+              full_name: pFullName.trim(),
+              photo_url: pPhotoUrl,
+              faculty: pFaculty.trim() || null,
+              academic_year: pAcademicYear.trim() || null,
+              bio: fallbackBio || null,
+            }).eq('id', editingMember.player_id)
+          }
         }
 
         // 2. Update squad member row
-        const err = await updateSquadMember(editingMember.id, {
+        let err = await updateSquadMember(editingMember.id, {
           jersey_number: formJersey === '' ? null : Number(formJersey),
           position: formPosition,
           is_captain: formIsCaptain,
           is_vice_captain: formIsViceCaptain,
+          team_type: formTeamType,
         })
+
+        if (err && (err.includes('team_type') || err.includes('column') || err.includes('42703'))) {
+          err = await updateSquadMember(editingMember.id, {
+            jersey_number: formJersey === '' ? null : Number(formJersey),
+            position: formPosition,
+            is_captain: formIsCaptain,
+            is_vice_captain: formIsViceCaptain,
+          })
+        }
 
         if (err) throw new Error(err)
       } else {
@@ -625,21 +718,56 @@ export default function Team() {
         let finalPlayerId = selectedExistingPlayerId
 
         if (squadModalTab === 'new') {
-          // Create new player record first
-          const { data: newP, error: pErr } = await supabase
-            .from('players')
-            .insert({
-              full_name: pFullName.trim(),
-              photo_url: pPhotoUrl,
-              faculty: pFaculty.trim() || null,
-              academic_year: pAcademicYear.trim() || null,
-              bio: pBio.trim() || null,
-            })
-            .select('id')
-            .single()
+          // Check if player with same name already exists in players table
+          const existingPlayer = allPlayers.find(
+            (p) => p.full_name.trim().toLowerCase() === pFullName.trim().toLowerCase()
+          )
 
-          if (pErr) throw new Error(pErr.message)
-          finalPlayerId = newP.id
+          if (existingPlayer) {
+            // Player already exists in players table; update latest details and reuse ID
+            await supabase.from('players').update({
+              photo_url: pPhotoUrl || existingPlayer.photo_url,
+              faculty: pFaculty.trim() || existingPlayer.faculty,
+              academic_year: pAcademicYear.trim() || existingPlayer.academic_year,
+              bio: cleanBioText || existingPlayer.bio,
+              team_type: formTeamType,
+            }).eq('id', existingPlayer.id)
+            finalPlayerId = existingPlayer.id
+          } else {
+            const { data: newP, error: pErr } = await supabase
+              .from('players')
+              .insert({
+                full_name: pFullName.trim(),
+                photo_url: pPhotoUrl,
+                faculty: pFaculty.trim() || null,
+                academic_year: pAcademicYear.trim() || null,
+                bio: cleanBioText || null,
+                team_type: formTeamType,
+              })
+              .select('id')
+              .single()
+
+            if (pErr && (pErr.message.includes('team_type') || pErr.message.includes('column') || pErr.code === '42703')) {
+              const { data: fbP, error: fbErr } = await supabase
+                .from('players')
+                .insert({
+                  full_name: pFullName.trim(),
+                  photo_url: pPhotoUrl,
+                  faculty: pFaculty.trim() || null,
+                  academic_year: pAcademicYear.trim() || null,
+                  bio: fallbackBio || null,
+                })
+                .select('id')
+                .single()
+
+              if (fbErr) throw new Error(fbErr.message)
+              finalPlayerId = fbP.id
+            } else if (pErr) {
+              throw new Error(pErr.message)
+            } else {
+              finalPlayerId = newP.id
+            }
+          }
         }
 
         if (!finalPlayerId) {
@@ -647,14 +775,26 @@ export default function Team() {
         }
 
         // Insert into squad_members
-        const err = await addSquadMember({
+        let err = await addSquadMember({
           tournament_id: selectedTournamentId,
           player_id: finalPlayerId,
           jersey_number: formJersey === '' ? null : Number(formJersey),
           position: formPosition,
           is_captain: formIsCaptain,
           is_vice_captain: formIsViceCaptain,
+          team_type: formTeamType,
         })
+
+        if (err && (err.includes('team_type') || err.includes('column') || err.includes('42703'))) {
+          err = await addSquadMember({
+            tournament_id: selectedTournamentId,
+            player_id: finalPlayerId,
+            jersey_number: formJersey === '' ? null : Number(formJersey),
+            position: formPosition,
+            is_captain: formIsCaptain,
+            is_vice_captain: formIsViceCaptain,
+          })
+        }
 
         if (err) throw new Error(err)
       }
@@ -663,10 +803,17 @@ export default function Team() {
       setEditingMember(null)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      if (msg.includes('23505') || msg.toLowerCase().includes('duplicate key') || msg.toLowerCase().includes('jersey_number')) {
-        setSquadFormError('That jersey number is already taken in this squad.')
-      } else if (msg.toLowerCase().includes('tournament_id_player_id')) {
+      const lower = msg.toLowerCase()
+      if (lower.includes('one_captain_per_squad') || (lower.includes('captain') && !lower.includes('vice'))) {
+        setSquadFormError(`There is already a captain assigned for the ${formTeamType}.`)
+      } else if (lower.includes('one_vice_captain_per_squad') || lower.includes('vice_captain') || lower.includes('vice-captain')) {
+        setSquadFormError(`There is already a vice captain assigned for the ${formTeamType}.`)
+      } else if (lower.includes('jersey') || lower.includes('squad_members_tournament_team_jersey_unique')) {
+        setSquadFormError('That jersey number is already taken in this team\'s squad.')
+      } else if (lower.includes('tournament_id_player_id')) {
         setSquadFormError('This player is already in this tournament squad.')
+      } else if (msg.includes('23505') || lower.includes('duplicate key')) {
+        setSquadFormError('A player with these details already exists in this squad.')
       } else {
         setSquadFormError(msg)
       }
@@ -893,42 +1040,125 @@ export default function Team() {
         </motion.div>
       )}
 
-      {/* 3. POSITION FILTER CHIPS */}
-      {selectedTournament && squadMembers.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            flexWrap: 'wrap',
-            marginBottom: '32px',
-          }}
-        >
-          {(['All', ...POSITIONS] as const).map((pos) => {
-            const isSelected = positionFilter === pos
-            const count = positionCounts[pos] ?? 0
-            return (
-              <button
-                key={pos}
-                type="button"
-                onClick={() => setPositionFilter(pos)}
-                style={{
-                  padding: '6px 16px',
-                  borderRadius: '999px',
-                  background: isSelected ? colors.orange : 'rgba(255,255,255,0.06)',
-                  color: isSelected ? colors.deepNavy : colors.grey,
-                  fontWeight: isSelected ? 700 : 500,
-                  border: isSelected ? 'none' : `1px solid ${colors.glassBorder}`,
-                  fontSize: '12.5px',
-                  fontFamily: fonts.body,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                {pos === 'All' ? 'All' : `${pos}s`} ({count})
-              </button>
-            )
-          })}
+      {/* 3. TEAM & POSITION FILTER STRIP */}
+      {selectedTournament && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '32px' }}>
+          {/* Team Filter Pills */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: colors.textSoft,
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                marginRight: '4px',
+              }}
+            >
+              Team:
+            </span>
+            {(['All', ...SQUAD_TEAMS] as const).map((team) => {
+              const isSelected = selectedTeamFilter === team
+              const isWomen = team === "Women's Team"
+              const count = teamCounts[team] ?? 0
+              return (
+                <button
+                  key={team}
+                  type="button"
+                  onClick={() => setSelectedTeamFilter(team)}
+                  style={{
+                    padding: '7px 18px',
+                    borderRadius: '999px',
+                    background: isSelected
+                      ? isWomen
+                        ? '#f472b6'
+                        : colors.orange
+                      : 'rgba(255,255,255,0.06)',
+                    color: isSelected ? colors.deepNavy : '#ffffff',
+                    fontWeight: isSelected ? 800 : 500,
+                    border: isSelected
+                      ? 'none'
+                      : `1px solid ${colors.glassBorder}`,
+                    fontSize: '12.5px',
+                    fontFamily: fonts.body,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: isSelected
+                      ? isWomen
+                        ? '0 4px 18px rgba(244,114,182,0.35)'
+                        : '0 4px 18px rgba(247,148,29,0.35)'
+                      : 'none',
+                  }}
+                >
+                  <span>🏑</span>
+                  <span>{team === 'All' ? 'All Squads' : team}</span>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      opacity: 0.85,
+                      fontWeight: 700,
+                      background: isSelected ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.1)',
+                      padding: '1px 7px',
+                      borderRadius: '999px',
+                    }}
+                  >
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Position Filter Chips */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: colors.textSoft,
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                marginRight: '4px',
+              }}
+            >
+              Position:
+            </span>
+            {(['All', ...POSITIONS] as const).map((pos) => {
+              const isSelected = positionFilter === pos
+              const count = positionCounts[pos] ?? 0
+              return (
+                <button
+                  key={pos}
+                  type="button"
+                  onClick={() => setPositionFilter(pos)}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '999px',
+                    background: isSelected ? 'rgba(247,148,29,0.2)' : 'rgba(255,255,255,0.04)',
+                    color: isSelected ? colors.orange : colors.grey,
+                    fontWeight: isSelected ? 700 : 500,
+                    border: isSelected ? `1px solid ${colors.orange}` : `1px solid ${colors.glassBorder}`,
+                    fontSize: '12px',
+                    fontFamily: fonts.body,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  {pos === 'All' ? 'All' : `${pos}s`} ({count})
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -963,13 +1193,17 @@ export default function Team() {
           message={
             squadMembers.length === 0
               ? 'Squad not announced yet.'
+              : selectedTeamFilter !== 'All' && positionFilter !== 'All'
+              ? `No ${positionFilter.toLowerCase()}s found in ${selectedTeamFilter}.`
+              : selectedTeamFilter !== 'All'
+              ? `No players registered for ${selectedTeamFilter} in this tournament yet.`
               : `No players found in position "${positionFilter}".`
           }
         />
       ) : (
         <AnimatePresence mode="wait">
           <motion.div
-            key={`${selectedTournamentId}-${positionFilter}`}
+            key={`${selectedTournamentId}-${selectedTeamFilter}-${positionFilter}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -1051,6 +1285,23 @@ export default function Team() {
               {/* Player details */}
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  {/* Team Badge */}
+                  <span
+                    style={{
+                      padding: '3px 10px',
+                      borderRadius: '999px',
+                      background: getSquadMemberTeam(viewingMember) === "Women's Team" ? 'rgba(244,114,182,0.18)' : 'rgba(56,189,248,0.18)',
+                      color: getSquadMemberTeam(viewingMember) === "Women's Team" ? '#f472b6' : '#38bdf8',
+                      border: `1px solid ${getSquadMemberTeam(viewingMember) === "Women's Team" ? 'rgba(244,114,182,0.45)' : 'rgba(56,189,248,0.45)'}`,
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    🏑 {getSquadMemberTeam(viewingMember)}
+                  </span>
                   <span
                     style={{
                       padding: '3px 10px',
@@ -1125,7 +1376,7 @@ export default function Team() {
               </div>
             </div>
 
-            {viewingMember.players?.bio && (
+            {cleanPlayerBio(viewingMember.players?.bio) && (
               <div style={{ paddingTop: '16px', borderTop: `1px solid ${colors.glassBorder}` }}>
                 <h5
                   style={{
@@ -1141,7 +1392,7 @@ export default function Team() {
                   Player Bio & Background
                 </h5>
                 <p style={{ fontFamily: fonts.body, fontSize: '14px', lineHeight: 1.65, color: 'rgba(255,255,255,0.85)', margin: 0 }}>
-                  {viewingMember.players.bio}
+                  {cleanPlayerBio(viewingMember.players?.bio)}
                 </p>
               </div>
             )}
@@ -1270,6 +1521,55 @@ export default function Team() {
         width={580}
       >
         <form onSubmit={handleSaveSquadMember}>
+          {/* Team / Squad Selection */}
+          <div style={{ marginBottom: '18px' }}>
+            <Field label="Team / Squad" hint="Specify whether this player belongs to Men's Team or Women's Team">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                {SQUAD_TEAMS.map((team) => {
+                  const active = formTeamType === team
+                  const isWomen = team === "Women's Team"
+                  return (
+                    <button
+                      key={team}
+                      type="button"
+                      onClick={() => setFormTeamType(team)}
+                      style={{
+                        padding: '11px 16px',
+                        borderRadius: '12px',
+                        background: active
+                          ? isWomen
+                            ? 'rgba(244,114,182,0.22)'
+                            : colors.orange
+                          : 'rgba(255,255,255,0.06)',
+                        color: active ? (isWomen ? '#fff' : colors.deepNavy) : '#ffffff',
+                        border: active
+                          ? `1.5px solid ${isWomen ? '#f472b6' : colors.orange}`
+                          : `1px solid ${colors.glassBorder}`,
+                        fontWeight: active ? 800 : 500,
+                        fontSize: '13.5px',
+                        cursor: 'pointer',
+                        fontFamily: fonts.body,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        boxShadow: active
+                          ? isWomen
+                            ? '0 0 16px rgba(244,114,182,0.3)'
+                            : '0 0 16px rgba(247,148,29,0.3)'
+                          : 'none',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <span style={{ fontSize: '15px' }}>🏑</span>
+                      <span>{team}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </Field>
+          </div>
+
           {/* Tabs for Adding (Pick existing vs Create new) */}
           {!editingMember && (
             <div
@@ -1336,7 +1636,17 @@ export default function Team() {
                 <select
                   required
                   value={selectedExistingPlayerId}
-                  onChange={(e) => setSelectedExistingPlayerId(e.target.value)}
+                  onChange={(e) => {
+                    const chosenId = e.target.value
+                    setSelectedExistingPlayerId(chosenId)
+                    const chosenP = allPlayers.find((p) => p.id === chosenId)
+                    if (chosenP) {
+                      const detectedTeam =
+                        chosenP.team_type ||
+                        (chosenP.bio && /\[Team:\s*Women's(?:\s*Team)?\]/i.test(chosenP.bio) ? "Women's Team" : "Men's Team")
+                      setFormTeamType(detectedTeam as SquadTeam)
+                    }
+                  }}
                   style={{ ...inputStyle, cursor: 'pointer' }}
                 >
                   <option value="" disabled style={{ background: colors.deepNavy }}>
@@ -1346,11 +1656,16 @@ export default function Team() {
                       ? 'No available unassigned players found'
                       : '-- Select a player --'}
                   </option>
-                  {availableExistingPlayers.map((p) => (
-                    <option key={p.id} value={p.id} style={{ background: colors.deepNavy, color: '#fff' }}>
-                      {p.full_name} {p.faculty ? `(${p.faculty})` : ''}
-                    </option>
-                  ))}
+                  {availableExistingPlayers.map((p) => {
+                    const pTeam =
+                      p.team_type ||
+                      (p.bio && /\[Team:\s*Women's(?:\s*Team)?\]/i.test(p.bio) ? "Women's Team" : "Men's Team")
+                    return (
+                      <option key={p.id} value={p.id} style={{ background: colors.deepNavy, color: '#fff' }}>
+                        {p.full_name} {p.faculty ? `(${p.faculty})` : ''} · {pTeam}
+                      </option>
+                    )
+                  })}
                 </select>
               </Field>
             </div>

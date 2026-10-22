@@ -13,23 +13,62 @@ interface Props {
 export default function Modal({ open, title, onClose, children, width = 560 }: Props) {
   const modalRef = useRef<HTMLDivElement>(null)
   const previousActiveElementRef = useRef<HTMLElement | null>(null)
+  const onCloseRef = useRef(onClose)
+  const wasOpenRef = useRef(false)
 
+  // Keep onClose updated in ref without triggering effects
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  // Handle focus when modal opens and restore when closed
+  useEffect(() => {
+    if (!open) {
+      if (wasOpenRef.current) {
+        wasOpenRef.current = false
+        previousActiveElementRef.current?.focus()
+      }
+      return
+    }
+
+    if (!wasOpenRef.current) {
+      wasOpenRef.current = true
+      previousActiveElementRef.current = document.activeElement as HTMLElement | null
+
+      const timer = setTimeout(() => {
+        if (!modalRef.current) return
+        // Prefer first form input over the close button
+        const firstInput = modalRef.current.querySelector<HTMLElement>(
+          'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])'
+        )
+        if (firstInput) {
+          firstInput.focus()
+        } else {
+          const firstFocusable = modalRef.current.querySelector<HTMLElement>(
+            'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          )
+          firstFocusable?.focus()
+        }
+      }, 60)
+
+      return () => clearTimeout(timer)
+    }
+  }, [open])
+
+  // Handle keydown (Escape and Tab trap) and body scroll lock
   useEffect(() => {
     if (!open) return
 
-    // Save previous active element to restore focus on close
-    previousActiveElementRef.current = document.activeElement as HTMLElement | null
-
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose()
+        onCloseRef.current()
         return
       }
 
       // Trap focus inside modal
       if (e.key === 'Tab' && modalRef.current) {
         const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          'button:not([disabled]), [href], input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
         )
         if (focusableElements.length === 0) return
 
@@ -54,23 +93,11 @@ export default function Modal({ open, title, onClose, children, width = 560 }: P
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
-    // Focus the first focusable element inside the modal
-    const timer = setTimeout(() => {
-      if (modalRef.current) {
-        const first = modalRef.current.querySelector<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        )
-        first?.focus()
-      }
-    }, 50)
-
     return () => {
-      clearTimeout(timer)
       window.removeEventListener('keydown', onKey)
       document.body.style.overflow = prevOverflow
-      previousActiveElementRef.current?.focus()
     }
-  }, [open, onClose])
+  }, [open])
 
   return (
     <AnimatePresence>

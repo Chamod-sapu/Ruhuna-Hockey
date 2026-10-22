@@ -20,7 +20,14 @@ const DEFAULT_INTRO =
 const DEFAULT_MISSION =
   'To develop disciplined, high-performing student athletes who uphold the pride of Ruhuna through teamwork, dedication, and competitive excellence.'
 
-const FIXED_ROLES: LeadershipRole[] = ['Captain', 'Vice Captain', 'Team Manager', 'Coach']
+const FIXED_ROLES: LeadershipRole[] = [
+  "Men's Captain",
+  "Women's Captain",
+  "Men's Vice Captain",
+  "Women's Vice Captain",
+  'Team Manager',
+  'Coach',
+]
 
 function getInitials(name: string): string {
   if (!name) return 'RH'
@@ -214,7 +221,7 @@ export default function About() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingLeader, setEditingLeader] = useState<Leader | null>(null)
   const [formYear, setFormYear] = useState<number>(currentYear)
-  const [formRole, setFormRole] = useState<LeadershipRole>('Captain')
+  const [formRole, setFormRole] = useState<LeadershipRole>("Men's Captain")
   const [formName, setFormName] = useState('')
   const [formPhoto, setFormPhoto] = useState<string | null>(null)
   const [formBio, setFormBio] = useState('')
@@ -230,7 +237,7 @@ export default function About() {
   // Card details modal state
   const [viewingLeader, setViewingLeader] = useState<Leader | null>(null)
 
-  const openAddForm = (initialRole: LeadershipRole = 'Captain', initialYear?: number) => {
+  const openAddForm = (initialRole: LeadershipRole = "Men's Captain", initialYear?: number) => {
     setEditingLeader(null)
     setFormYear(initialYear ?? selectedYear ?? currentYear)
     setFormRole(initialRole)
@@ -281,6 +288,10 @@ export default function About() {
     if (err) {
       if (err.includes('23505') || err.toLowerCase().includes('duplicate key') || err.toLowerCase().includes('unique')) {
         setFormError('That role already has a person for this year — edit the existing entry instead.')
+      } else if (err.includes('leadership_role_check')) {
+        setFormError(
+          'Database check constraint needs updating in Supabase SQL Editor. Please run the SQL in update_leadership_roles.sql.'
+        )
       } else {
         setFormError(err)
       }
@@ -522,13 +533,13 @@ export default function About() {
           </div>
         </div>
 
-        {/* Leaders Grid (Fixed 4: Captain, Vice Captain, Team Manager, Coach) */}
+        {/* Leaders Grid (6 roles: Men's Captain, Women's Captain, Men's Vice Captain, Women's Vice Captain, Team Manager, Coach) */}
         {leadersError ? (
           <EmptyState message={`Failed to load leadership data: ${leadersError}`} />
         ) : leadersLoading ? (
           /* Loading Skeletons */
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '22px' }}>
-            {[0, 1, 2, 3].map((i) => (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '22px' }}>
+            {[0, 1, 2, 3, 4, 5].map((i) => (
               <motion.div
                 key={i}
                 animate={{ opacity: [0.35, 0.7, 0.35] }}
@@ -552,13 +563,21 @@ export default function About() {
               transition={{ duration: 0.3, ease: 'easeOut' }}
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
                 gap: '22px',
               }}
             >
               {FIXED_ROLES.map((role) => {
-                const leader = leaders.find((l) => l.season_year === selectedYear && l.role === role)
-                const isCaptain = role === 'Captain' || role === 'Vice Captain'
+                const leader = leaders.find((l) => {
+                  if (l.season_year !== selectedYear) return false
+                  if (l.role === role) return true
+                  if (role === "Men's Captain" && (l.role === "Men's Team Captain" || l.role === 'Captain')) return true
+                  if (role === "Women's Captain" && (l.role === "Women's Team Captain")) return true
+                  if (role === "Men's Vice Captain" && (l.role === "Vice Men's Team Captain" || l.role === 'Vice Captain')) return true
+                  if (role === "Women's Vice Captain" && (l.role === "Vice Women's Team Captain")) return true
+                  return false
+                })
+                const isCaptain = role.includes('Captain')
 
                 if (!leader) {
                   return (

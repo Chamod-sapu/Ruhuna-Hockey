@@ -11,10 +11,24 @@ import { useTable } from '../../hooks/useTable'
 import { deleteImageByUrl } from '../../lib/storage'
 import { colors, fonts } from '../../lib/theme'
 import { useAuth } from '../../context/AuthContext'
-import { ACHIEVEMENT_CATEGORIES, type Achievement } from '../../lib/types'
+import { ACHIEVEMENT_CATEGORIES, ACHIEVEMENT_TEAMS, type AchievementTeam, type Achievement, type AchievementCategory } from '../../lib/types'
+
+function getAchievementTeam(a: Achievement): AchievementTeam {
+  if (a.team_type === "Women's Team" || a.team_type === "Women's" || a.team_type === 'women') return "Women's Team"
+  if (a.team_type === "Men's Team" || a.team_type === "Men's" || a.team_type === 'men') return "Men's Team"
+  if (a.description && /\[Team:\s*Women's(?:\s*Team)?\]/i.test(a.description)) return "Women's Team"
+  if (a.description && /\[Team:\s*Men's(?:\s*Team)?\]/i.test(a.description)) return "Men's Team"
+  return "Men's Team"
+}
+
+function cleanAchievementDescription(desc: string | null | undefined): string | null {
+  if (!desc) return null
+  const cleaned = desc.replace(/\[Team:\s*(Men's|Women's)(?:\s*Team)?\]\s*/gi, '').trim()
+  return cleaned || null
+}
 
 // Category Icons
-function CategoryIcon({ category }: { category: Achievement['category'] }) {
+function CategoryIcon({ category }: { category: AchievementCategory }) {
   switch (category) {
     case 'Championship':
       // Trophy
@@ -37,16 +51,36 @@ function CategoryIcon({ category }: { category: Achievement['category'] }) {
           <path d="m10 14 1.5 2 2.5-3" />
         </svg>
       )
+    case 'Second Runner-up':
     case 'Podium':
-      // 3-Step Podium
+      // Bronze / 3rd Medal
       return (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 14h4v7H4z" />
-          <path d="M10 9h4v12h-4z" />
-          <path d="M16 12h4v9h-4z" />
-          <path d="M2 21h20" />
+          <circle cx="12" cy="14" r="6" />
+          <path d="M7 2h10l-2 6H9L7 2Z" />
+          <path d="M10 12h4" />
+          <path d="M12 12v4" />
         </svg>
       )
+    case 'Third Runner-up':
+    case 'Thrid Runner-up':
+      // Ribbon Award Badge
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="9" r="6" />
+          <path d="m8.5 14.5-2.5 7.5 6-3 6 3-2.5-7.5" />
+        </svg>
+      )
+    case 'Quarter Finalist':
+    case 'Quater Finalist':
+      // Shield
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          <path d="m9 12 2 2 4-4" />
+        </svg>
+      )
+    case 'Individual Awards':
     case 'Individual Award':
       // Star Award
       return (
@@ -139,24 +173,48 @@ export default function Achievements() {
     remove: removeAchievement,
   } = useTable<Achievement>('achievements', { orderBy: 'year', ascending: false })
 
-  // 2. Category Filter State
-  const [selectedCategory, setSelectedCategory] = useState<'All' | Achievement['category']>('All')
+  // 2. Filter State
+  const [selectedCategory, setSelectedCategory] = useState<'All' | AchievementCategory>('All')
+  const [selectedTeamFilter, setSelectedTeamFilter] = useState<'All' | AchievementTeam>('All')
 
   // Filtered achievements
   const filteredAchievements = useMemo(() => {
-    if (selectedCategory === 'All') return achievements
-    return achievements.filter((a) => a.category === selectedCategory)
-  }, [achievements, selectedCategory])
+    let list = achievements
+    if (selectedTeamFilter !== 'All') {
+      list = list.filter((a) => getAchievementTeam(a) === selectedTeamFilter)
+    }
+    if (selectedCategory !== 'All') {
+      list = list.filter((a) => {
+        if (a.category === selectedCategory) return true
+        if (selectedCategory === 'Third Runner-up' && a.category === 'Thrid Runner-up') return true
+        if (selectedCategory === 'Quarter Finalist' && a.category === 'Quater Finalist') return true
+        if (selectedCategory === 'Individual Awards' && (a.category as string) === 'Individual Award') return true
+        return false
+      })
+    }
+    return list
+  }, [achievements, selectedTeamFilter, selectedCategory])
 
-  // Category counts
+  // Category counts (scoped to selected team)
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { All: achievements.length }
+    const list = selectedTeamFilter === 'All'
+      ? achievements
+      : achievements.filter((a) => getAchievementTeam(a) === selectedTeamFilter)
+    const counts: Record<string, number> = { All: list.length }
     for (const cat of ACHIEVEMENT_CATEGORIES) counts[cat] = 0
-    for (const a of achievements) {
-      if (counts[a.category] !== undefined) counts[a.category]++
+    for (const a of list) {
+      if (counts[a.category] !== undefined) {
+        counts[a.category]++
+      } else if (a.category === 'Thrid Runner-up') {
+        counts['Third Runner-up'] = (counts['Third Runner-up'] || 0) + 1
+      } else if (a.category === 'Quater Finalist') {
+        counts['Quarter Finalist'] = (counts['Quarter Finalist'] || 0) + 1
+      } else if ((a.category as string) === 'Individual Award') {
+        counts['Individual Awards'] = (counts['Individual Awards'] || 0) + 1
+      }
     }
     return counts
-  }, [achievements])
+  }, [achievements, selectedTeamFilter])
 
   // Stat Counters data
   const championshipsCount = useMemo(() => {
@@ -164,7 +222,14 @@ export default function Achievements() {
   }, [achievements])
 
   const podiumFinishesCount = useMemo(() => {
-    return achievements.filter((a) => a.category === 'Runner-up' || a.category === 'Podium').length
+    return achievements.filter(
+      (a) =>
+        a.category === 'Runner-up' ||
+        a.category === 'Second Runner-up' ||
+        a.category === 'Third Runner-up' ||
+        a.category === 'Thrid Runner-up' ||
+        (a.category as string) === 'Podium'
+    ).length
   }, [achievements])
 
   const latestYear = useMemo(() => {
@@ -192,9 +257,10 @@ export default function Achievements() {
   const currentYear = new Date().getFullYear()
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingAchievement, setEditingAchievement] = useState<Achievement | null>(null)
+  const [formTeamType, setFormTeamType] = useState<AchievementTeam>("Men's Team")
   const [formTitle, setFormTitle] = useState('')
   const [formYear, setFormYear] = useState<number>(currentYear)
-  const [formCategory, setFormCategory] = useState<Achievement['category']>('Championship')
+  const [formCategory, setFormCategory] = useState<AchievementCategory>('Championship')
   const [formResultLabel, setFormResultLabel] = useState('')
   const [formTournamentName, setFormTournamentName] = useState('')
   const [formDescription, setFormDescription] = useState('')
@@ -209,6 +275,7 @@ export default function Achievements() {
   // Handlers
   const openAddModal = () => {
     setEditingAchievement(null)
+    setFormTeamType("Men's Team")
     setFormTitle('')
     setFormYear(currentYear)
     setFormCategory('Championship')
@@ -222,12 +289,23 @@ export default function Achievements() {
 
   const openEditModal = (a: Achievement) => {
     setEditingAchievement(a)
+    setFormTeamType(getAchievementTeam(a))
     setFormTitle(a.title)
     setFormYear(a.year)
-    setFormCategory(a.category)
+    const normalizedCat: AchievementCategory =
+      a.category === 'Thrid Runner-up'
+        ? 'Third Runner-up'
+        : a.category === 'Quater Finalist'
+        ? 'Quarter Finalist'
+        : (a.category as string) === 'Individual Award'
+        ? 'Individual Awards'
+        : (a.category as string) === 'Podium'
+        ? 'Second Runner-up'
+        : a.category
+    setFormCategory(normalizedCat)
     setFormResultLabel(a.result_label ?? '')
     setFormTournamentName(a.tournament_name ?? '')
-    setFormDescription(a.description ?? '')
+    setFormDescription(cleanAchievementDescription(a.description) ?? '')
     setFormImageUrl(a.image_url)
     setFormError(null)
     setIsFormOpen(true)
@@ -238,25 +316,52 @@ export default function Achievements() {
     setSavingAchievement(true)
     setFormError(null)
 
-    const payload = {
+    const basePayload: Record<string, unknown> = {
       title: formTitle.trim(),
       year: Number(formYear),
       category: formCategory,
       result_label: formResultLabel.trim() || null,
       tournament_name: formTournamentName.trim() || null,
-      description: formDescription.trim() || null,
       image_url: formImageUrl,
+    }
+
+    // Try primary save with team_type column
+    const fullPayload = {
+      ...basePayload,
+      team_type: formTeamType,
+      description: formDescription.trim() || null,
     }
 
     let err: string | null = null
     if (editingAchievement) {
-      err = await updateAchievement(editingAchievement.id, payload)
+      err = await updateAchievement(editingAchievement.id, fullPayload)
     } else {
-      err = await addAchievement(payload)
+      err = await addAchievement(fullPayload)
+    }
+
+    // Fallback if team_type column does not exist yet in schema
+    if (err && (err.includes('team_type') || err.includes('PGRST204') || err.includes('column'))) {
+      const userDesc = cleanAchievementDescription(formDescription.trim()) ?? ''
+      const fallbackDesc = `[Team: ${formTeamType}]${userDesc ? ' ' + userDesc : ''}`
+      const fallbackPayload = {
+        ...basePayload,
+        description: fallbackDesc || null,
+      }
+      if (editingAchievement) {
+        err = await updateAchievement(editingAchievement.id, fallbackPayload)
+      } else {
+        err = await addAchievement(fallbackPayload)
+      }
     }
 
     if (err) {
-      setFormError(err)
+      if (err.includes('achievements_category_check')) {
+        setFormError(
+          'Database check constraint needs updating in Supabase SQL Editor. Please run the SQL in update_achievements_category_check.sql.'
+        )
+      } else {
+        setFormError(err)
+      }
       setSavingAchievement(false)
     } else {
       setSavingAchievement(false)
@@ -381,41 +486,81 @@ export default function Achievements() {
         <HighlightCounter value={latestYear} label={`Latest: ${latestYear}`} />
       </div>
 
-      {/* 2. CATEGORY FILTER CHIPS */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          flexWrap: 'wrap',
-          marginBottom: '48px',
-        }}
-      >
-        {(['All', ...ACHIEVEMENT_CATEGORIES] as const).map((cat) => {
-          const isSelected = selectedCategory === cat
-          const count = categoryCounts[cat] ?? 0
-          return (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setSelectedCategory(cat)}
-              style={{
-                padding: '7px 16px',
-                borderRadius: '999px',
-                background: isSelected ? colors.orange : 'rgba(255,255,255,0.06)',
-                color: isSelected ? colors.deepNavy : colors.grey,
-                fontWeight: isSelected ? 700 : 500,
-                border: isSelected ? 'none' : `1px solid ${colors.glassBorder}`,
-                fontSize: '12.5px',
-                fontFamily: fonts.body,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              {cat} ({count})
-            </button>
-          )
-        })}
+      {/* 2. TEAM & CATEGORY FILTER STRIP */}
+      <div style={{ marginBottom: '44px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {/* Team Filter Pills */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: colors.textSoft, textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: '4px' }}>
+            Team:
+          </span>
+          {(['All', ...ACHIEVEMENT_TEAMS] as const).map((team) => {
+            const isSelected = selectedTeamFilter === team
+            return (
+              <button
+                key={team}
+                type="button"
+                onClick={() => setSelectedTeamFilter(team)}
+                style={{
+                  padding: '7px 18px',
+                  borderRadius: '999px',
+                  background: isSelected ? colors.orange : 'rgba(255,255,255,0.06)',
+                  color: isSelected ? colors.deepNavy : '#ffffff',
+                  fontWeight: isSelected ? 800 : 500,
+                  border: isSelected ? 'none' : `1px solid ${colors.glassBorder}`,
+                  fontSize: '12.5px',
+                  fontFamily: fonts.body,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <span>🏑</span>
+                <span>{team === 'All' ? 'All Squads' : team}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Category Filter Chips */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ fontSize: '12px', fontWeight: 700, color: colors.textSoft, textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: '4px' }}>
+            Category:
+          </span>
+          {(['All', ...ACHIEVEMENT_CATEGORIES] as const).map((cat) => {
+            const isSelected = selectedCategory === cat
+            const count = categoryCounts[cat] ?? 0
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '999px',
+                  background: isSelected ? 'rgba(247,148,29,0.2)' : 'rgba(255,255,255,0.04)',
+                  color: isSelected ? colors.orange : colors.grey,
+                  fontWeight: isSelected ? 700 : 500,
+                  border: isSelected ? `1px solid ${colors.orange}` : `1px solid ${colors.glassBorder}`,
+                  fontSize: '12px',
+                  fontFamily: fonts.body,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {cat} ({count})
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* 3. VERTICAL TIMELINE GROUPED BY YEAR */}
@@ -496,6 +641,8 @@ export default function Achievements() {
                 {items.map((achievement, idx) => {
                   const isLeft = idx % 2 === 0
                   const isChampionship = achievement.category === 'Championship'
+                  const team = getAchievementTeam(achievement)
+                  const cleanDesc = cleanAchievementDescription(achievement.description)
 
                   return (
                     <div
@@ -543,8 +690,8 @@ export default function Achievements() {
                           </div>
                         )}
 
-                        {/* Top bar: Category Icon + Result Label + Category */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                        {/* Top bar: Category Icon + Team Badge + Result Label + Category */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
                           <div
                             style={{
                               width: '36px',
@@ -561,6 +708,25 @@ export default function Achievements() {
                           >
                             <CategoryIcon category={achievement.category} />
                           </div>
+
+                          {/* Team Badge */}
+                          <span
+                            style={{
+                              padding: '3px 10px',
+                              borderRadius: '999px',
+                              background: team === "Women's Team" ? 'rgba(244,114,182,0.15)' : 'rgba(56,189,248,0.15)',
+                              color: team === "Women's Team" ? '#f472b6' : '#38bdf8',
+                              border: `1px solid ${team === "Women's Team" ? 'rgba(244,114,182,0.35)' : 'rgba(56,189,248,0.35)'}`,
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              fontFamily: fonts.body,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            🏑 {team}
+                          </span>
 
                           {achievement.result_label && (
                             <span
@@ -620,7 +786,7 @@ export default function Achievements() {
                         )}
 
                         {/* Description (3-line clamp) */}
-                        {achievement.description && (
+                        {cleanDesc && (
                           <p
                             style={{
                               fontFamily: fonts.body,
@@ -634,7 +800,7 @@ export default function Achievements() {
                               overflow: 'hidden',
                             }}
                           >
-                            {achievement.description}
+                            {cleanDesc}
                           </p>
                         )}
 
@@ -678,7 +844,7 @@ export default function Achievements() {
         {viewingAchievement && (
           <div>
             {/* Header info */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
               <div
                 style={{
                   width: '36px',
@@ -694,6 +860,22 @@ export default function Achievements() {
               >
                 <CategoryIcon category={viewingAchievement.category} />
               </div>
+              <span
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: '999px',
+                  background: getAchievementTeam(viewingAchievement) === "Women's Team" ? 'rgba(244,114,182,0.18)' : 'rgba(56,189,248,0.18)',
+                  color: getAchievementTeam(viewingAchievement) === "Women's Team" ? '#f472b6' : '#38bdf8',
+                  border: `1px solid ${getAchievementTeam(viewingAchievement) === "Women's Team" ? 'rgba(244,114,182,0.4)' : 'rgba(56,189,248,0.4)'}`,
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                🏑 {getAchievementTeam(viewingAchievement)}
+              </span>
               <span
                 style={{
                   padding: '4px 12px',
@@ -742,10 +924,10 @@ export default function Achievements() {
               </div>
             )}
 
-            {viewingAchievement.description && (
+            {cleanAchievementDescription(viewingAchievement.description) && (
               <div style={{ paddingTop: '14px', borderTop: `1px solid ${colors.glassBorder}` }}>
                 <p style={{ fontFamily: fonts.body, fontSize: '14px', lineHeight: 1.7, color: 'rgba(255,255,255,0.85)', margin: 0 }}>
-                  {viewingAchievement.description}
+                  {cleanAchievementDescription(viewingAchievement.description)}
                 </p>
               </div>
             )}
@@ -761,6 +943,55 @@ export default function Achievements() {
         width={560}
       >
         <form onSubmit={handleSaveAchievement}>
+          {/* Team / Squad Selection */}
+          <div style={{ marginBottom: '16px' }}>
+            <Field label="Team / Squad" hint="Specify whether this is a Men's Team or Women's Team achievement">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                {ACHIEVEMENT_TEAMS.map((team) => {
+                  const active = formTeamType === team
+                  const isWomen = team === "Women's Team"
+                  return (
+                    <button
+                      key={team}
+                      type="button"
+                      onClick={() => setFormTeamType(team)}
+                      style={{
+                        padding: '11px 16px',
+                        borderRadius: '12px',
+                        background: active
+                          ? isWomen
+                            ? 'rgba(244,114,182,0.22)'
+                            : colors.orange
+                          : 'rgba(255,255,255,0.06)',
+                        color: active ? (isWomen ? '#fff' : colors.deepNavy) : '#ffffff',
+                        border: active
+                          ? `1.5px solid ${isWomen ? '#f472b6' : colors.orange}`
+                          : `1px solid ${colors.glassBorder}`,
+                        fontWeight: active ? 800 : 500,
+                        fontSize: '13.5px',
+                        cursor: 'pointer',
+                        fontFamily: fonts.body,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        boxShadow: active
+                          ? isWomen
+                            ? '0 0 16px rgba(244,114,182,0.3)'
+                            : '0 0 16px rgba(247,148,29,0.3)'
+                          : 'none',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <span style={{ fontSize: '15px' }}>🏑</span>
+                      <span>{team}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </Field>
+          </div>
+
           <Field label="Achievement Title">
             <input
               type="text"
@@ -788,7 +1019,7 @@ export default function Achievements() {
             <Field label="Category">
               <select
                 value={formCategory}
-                onChange={(e) => setFormCategory(e.target.value as Achievement['category'])}
+                onChange={(e) => setFormCategory(e.target.value as AchievementCategory)}
                 style={{ ...inputStyle, cursor: 'pointer' }}
               >
                 {ACHIEVEMENT_CATEGORIES.map((cat) => (

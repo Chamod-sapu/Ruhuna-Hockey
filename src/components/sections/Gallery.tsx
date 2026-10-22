@@ -1546,6 +1546,13 @@ function GalleryTile({
   isAdmin,
 }: GalleryTileProps) {
   const [loaded, setLoaded] = useState(false)
+  const imgRef = useRef<HTMLImageElement>(null)
+
+  useEffect(() => {
+    if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
+      setLoaded(true)
+    }
+  }, [item.image_url])
 
   return (
     <motion.div
@@ -1578,27 +1585,36 @@ function GalleryTile({
         <div
           className="shimmer-placeholder"
           style={{
+            position: 'absolute',
+            inset: 0,
             width: '100%',
-            height: '240px',
+            height: '100%',
+            minHeight: '220px',
             borderRadius: '16px',
+            zIndex: 1,
+            pointerEvents: 'none',
           }}
         />
       )}
 
       {/* Actual Image */}
       <img
+        ref={imgRef}
         src={item.image_url}
         alt={item.title || item.caption || `Ruhuna Hockey ${item.category}`}
-        loading="lazy"
+        loading={index < 8 ? 'eager' : 'lazy'}
         decoding="async"
         onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)}
         className="gallery-img"
         style={{
           width: '100%',
           height: 'auto',
-          display: loaded ? 'block' : 'none',
+          minHeight: loaded ? 'auto' : '220px',
+          display: 'block',
           borderRadius: '16px',
-          transition: 'transform 0.4s cubic-bezier(0.2, 0, 0.2, 1)',
+          opacity: loaded ? 1 : 0,
+          transition: 'opacity 0.25s ease, transform 0.4s cubic-bezier(0.2, 0, 0.2, 1)',
         }}
       />
 
